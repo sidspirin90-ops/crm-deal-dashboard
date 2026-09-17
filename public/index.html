@@ -383,7 +383,7 @@
           renderKpis(d.summary) +
           renderFunnel(d.stages, d.summary) +
           renderRecent(d.recent) +
-          `<div class="footer">Показаны сделки основной воронки (категория 0)${rangeLabel}${curTag}. ${d.multiCurrency ? 'Денежные итоги разделены по валютам сделок.' : 'Допущение: портал ведёт сделки в одной валюте — итоги в ' + (curSym || '₽') + '.'}</div>`;
+          `<div class="footer">Показаны сделки основной воронки (категория 0)${rangeLabel}${curTag}.</div>`;
       } catch (err) {
         renderError('Не удалось загрузить данные: ' + err.message);
         root.innerHTML = '<div class="empty"><b>Ошибка загрузки</b>Проверьте доступ к API и попробуйте ещё раз.</div>';
