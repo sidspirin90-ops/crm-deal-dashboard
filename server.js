@@ -84,6 +84,13 @@ async function vibeCall(routePath, init = {}, timeoutMs = 25000) {
     }
 
     if (!res.ok || !body || body.success !== true) {
+      // Транзиентный 502 со стороны портала (напр. BITRIX_UNAVAILABLE) — повторяем пару раз.
+      if (res.status === 502 && attempts < 3) {
+        const wait = Math.min(Math.pow(2, attempts), 8);
+        console.warn(`Upstream 502, retrying in ${wait}s (attempt ${attempts})`);
+        await new Promise((resolve) => setTimeout(resolve, wait * 1000));
+        continue;
+      }
       const err = new Error((body && body.error && body.error.message) || `Vibe API error (${res.status})`);
       err.status = res.status;
       err.body = body;
