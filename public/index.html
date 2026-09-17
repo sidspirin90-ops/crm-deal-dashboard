@@ -55,6 +55,10 @@
     .date-field { color-scheme: dark; }
     .pill.active { background: #fff; color: var(--blue); border-color: #fff; font-weight: 600; }
     .pill:hover { background: rgba(255,255,255,.22); }
+    .cur-pill { display: inline-flex; align-items: center; }
+    .cur-pill .cdot { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 6px; flex: 0 0 auto; }
+    .cur-pill:hover .cdot { box-shadow: 0 0 0 2px rgba(255,255,255,.45); }
+    .cur-pill.active .cdot { box-shadow: 0 0 0 2px rgba(46,116,181,.35); }
     .btn { background: #fff; color: var(--blue); border-color: #fff; font-weight: 600; }
     .btn:hover { background: #e8f3fb; }
     main { max-width: 1180px; margin: 0 auto; padding: 22px 16px 60px; }
@@ -141,9 +145,7 @@
         <span>—</span>
         <input type="date" class="date-field" id="to" aria-label="Дата по">
       </div>
-      <select class="date-field" id="currency" aria-label="Валюта">
-        <option value="">Все валюты</option>
-      </select>
+      <div class="presets" id="curPills" aria-label="Валюта"></div>
       <button class="btn" id="apply">Применить</button>
     </div>
   </header>
@@ -159,17 +161,24 @@
     const $ = (id) => document.getElementById(id);
     const state = { days: 30, from: '', to: '', currency: '' };
 
+    const CUR_COLORS = { RUB: '#2e74b5', USD: '#25a25a', EUR: '#eaa300', UAH: '#8e44ad', BYN: '#e5524b' };
+    function curColor(code) { return CUR_COLORS[String(code || '').toUpperCase()] || '#9aa7b5'; }
+
     function fillCurrencySelect(list) {
-      const sel = $('currency');
+      const box = $('curPills');
       const items = list || [];
       if (!state.currency) {
         const base = items.find((c) => c.base) || items[0];
         if (base) state.currency = base.id;
       }
-      sel.innerHTML = items.map((c) =>
-        `<option value="${escapeHtml(c.id)}">${escapeHtml(c.id)}${c.symbol ? ' ' + escapeHtml(c.symbol) : ''}</option>`
+      box.innerHTML = items.map((c) =>
+        `<button class="pill cur-pill${c.id === state.currency ? ' active' : ''}" data-cur="${escapeHtml(c.id)}"><span class="cdot" style="background:${curColor(c.id)}"></span>${escapeHtml(c.id)}</button>`
       ).join('');
-      if (state.currency) sel.value = state.currency;
+      box.querySelectorAll('.cur-pill').forEach((b) => b.addEventListener('click', () => {
+        state.currency = b.dataset.cur;
+        box.querySelectorAll('.cur-pill').forEach((x) => x.classList.toggle('active', x === b));
+        load();
+      }));
     }
 
     function fmt(n) {
@@ -202,12 +211,6 @@
     $('apply').addEventListener('click', () => {
       state.from = $('from').value;
       state.to = $('to').value;
-      state.currency = $('currency').value;
-      load();
-    });
-
-    $('currency').addEventListener('change', () => {
-      state.currency = $('currency').value;
       load();
     });
 
@@ -269,6 +272,7 @@
     function renderFunnel(stages, summary) {
       const per = summary.perCurrency || {};
       const multi = Object.keys(per).length > 1;
+      const singleSym = multi ? '' : (((Object.values(per)[0]) || {}).symbol || '');
       const maxBase = multi
         ? stages.reduce((m, s) => Math.max(m, s.count || 0), 0) || 1
         : stages.reduce((m, s) => Math.max(m, stageTotal(s)), 0) || 1;
@@ -276,10 +280,10 @@
         const base = multi ? (s.count || 0) : stageTotal(s);
         const title = multi
           ? (s.count + ' сделок · ' + Object.keys(s.amounts || {}).map((c) => c + ': ' + fmt(s.amounts[c])).join(', '))
-          : (s.count + ' сделок · ' + fmt(base));
+          : (s.count + ' сделок · ' + fmt(base) + (singleSym ? ' ' + singleSym : ''));
         const amtCell = multi
           ? Object.keys(s.amounts || {}).map((c) => '<span>' + fmt(s.amounts[c]) + ' ' + escapeHtml((per[c] && per[c].symbol) || '') + '</span>').join('<br>')
-          : '<span>' + fmt(base) + '</span>';
+          : '<span>' + fmt(base) + (singleSym ? ' ' + escapeHtml(singleSym) : '') + '</span>';
         return `
         <div class="row">
           <span class="dot" style="background:${stageColor(s.color)}"></span>

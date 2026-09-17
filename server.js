@@ -171,7 +171,7 @@ async function loadRecent(createdAt) {
       filter: Object.assign({ categoryId: MAIN_CATEGORY_ID }, { createdAt }),
       sort: { createdAt: 'desc' },
       limit: 10,
-      select: ['id', 'title', 'amount', 'stageId', 'categoryId', 'currencyId', 'assignedById', 'createdAt'],
+      select: ['id', 'title', 'amount', 'stageId', 'categoryId', 'currency', 'assignedById', 'createdAt'],
     }),
   });
   return Array.isArray(data) ? data : [];
@@ -258,8 +258,8 @@ async function buildDashboard(from, to, onlyCurrency) {
       id: d.id,
       title: d.title || `Сделка #${d.id}`,
       amount: d.amount || 0,
-      currency: currencySymbol(d.currencyId),
-      currencyId: d.currencyId || null,
+      currency: currencySymbol(d.currency || d.currencyId),
+      currencyId: d.currency || d.currencyId || null,
       stageId: d.stageId,
       stageName: (stages.find((s) => s.stageId === d.stageId) || {}).name || d.stageId,
       stageColor: (stages.find((s) => s.stageId === d.stageId) || {}).color || null,
