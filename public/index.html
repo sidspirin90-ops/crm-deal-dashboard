@@ -202,24 +202,36 @@
       el.hidden = false;
     }
 
+    function fmtMoney(n, sym) {
+      return fmt(n) + (sym ? ' ' + sym : '');
+    }
+
     function renderKpis(summary) {
-      return `
-        <div class="kpis">
+      const per = summary.perCurrency || {};
+      const curs = Object.keys(per);
+      const tag = (cur) => (curs.length > 1 ? ' · ' + escapeHtml(cur) : '');
+      const cards = curs.map((cur) => {
+        const p = per[cur];
+        return `
           <div class="kpi b-open">
-            <div class="label">Открыто сделок · сумма</div>
-            <div class="value">${fmt(summary.openSum)}</div>
+            <div class="label">Открыто сделок · сумма${tag(cur)}</div>
+            <div class="value">${fmtMoney(p.openSum, p.symbol)}</div>
             <div class="sub">${summary.openCount} открытых сделок</div>
           </div>
           <div class="kpi b-won">
-            <div class="label">Выиграно за период</div>
+            <div class="label">Выиграно за период${tag(cur)}</div>
             <div class="value">${summary.wonCount} <span class="muted" style="font-size:14px">сделок</span></div>
-            <div class="sub">на ${fmt(summary.wonSum)}</div>
+            <div class="sub">на ${fmtMoney(p.wonSum, p.symbol)}</div>
           </div>
           <div class="kpi b-check">
-            <div class="label">Средний чек</div>
-            <div class="value">${fmt(summary.avgCheck)}</div>
+            <div class="label">Средний чек${tag(cur)}</div>
+            <div class="value">${fmtMoney(p.avgCheck, p.symbol)}</div>
             <div class="sub">по выигранным сделкам</div>
-          </div>
+          </div>`;
+      }).join('');
+      return `
+        <div class="kpis">
+          ${cards}
           <div class="kpi b-conv">
             <div class="label">Конверсия в успешные</div>
             <div class="value">${summary.conversion.toFixed(1)}%</div>
@@ -228,21 +240,34 @@
         </div>`;
     }
 
-    function maxStageAmount(stages) {
-      return stages.reduce((m, s) => Math.max(m, s.amount || 0), 0) || 1;
+    function stageTotal(s) {
+      return Object.keys(s.amounts || {}).reduce((a, c) => a + (s.amounts[c] || 0), 0);
     }
 
-    function renderFunnel(stages) {
-      const maxAmt = maxStageAmount(stages);
-      const rows = stages.map((s) => `
+    function renderFunnel(stages, summary) {
+      const per = summary.perCurrency || {};
+      const multi = Object.keys(per).length > 1;
+      const maxBase = multi
+        ? stages.reduce((m, s) => Math.max(m, s.count || 0), 0) || 1
+        : stages.reduce((m, s) => Math.max(m, stageTotal(s)), 0) || 1;
+      const rows = stages.map((s) => {
+        const base = multi ? (s.count || 0) : stageTotal(s);
+        const title = multi
+          ? (s.count + ' сделок · ' + Object.keys(s.amounts || {}).map((c) => c + ': ' + fmt(s.amounts[c])).join(', '))
+          : (s.count + ' сделок · ' + fmt(base));
+        const amtCell = multi
+          ? Object.keys(s.amounts || {}).map((c) => '<span>' + fmt(s.amounts[c]) + ' ' + escapeHtml((per[c] && per[c].symbol) || '') + '</span>').join('<br>')
+          : '<span>' + fmt(base) + '</span>';
+        return `
         <div class="row">
           <span class="dot" style="background:${stageColor(s.color)}"></span>
           <span class="name" title="${s.stageId}">${s.name || s.stageId}</span>
-          <div class="bar-wrap" title="${s.count} сделок · ${fmt(s.amount)}">
-            <div class="bar" style="width:${Math.round(((s.amount || 0) / maxAmt) * 100)}%;background:${stageColor(s.color)}"></div>
+          <div class="bar-wrap" title="${title}">
+            <div class="bar" style="width:${Math.round((base / maxBase) * 100)}%;background:${stageColor(s.color)}"></div>
           </div>
-          <div class="num"><b>${s.count}</b><span>${fmt(s.amount)}</span></div>
-        </div>`).join('');
+          <div class="num"><b>${s.count}</b>${amtCell}</div>
+        </div>`;
+      }).join('');
       const empty = stages.length ? `
         <div class="row"><span class="dot" style="background:#d7dee6;width:16px;height:16px"></span>
         <span class="name">Нет сделок за период</span></div>` : '';
@@ -321,9 +346,9 @@
 
         root.innerHTML =
           renderKpis(d.summary) +
-          renderFunnel(d.stages) +
+          renderFunnel(d.stages, d.summary) +
           renderRecent(d.recent) +
-          `<div class="footer">Показаны сделки основной воронки (категория 0)${rangeLabel}. Допущение: портал ведёт сделки в одной валюте — итоги в ₽.</div>`;
+          `<div class="footer">Показаны сделки основной воронки (категория 0)${rangeLabel}. ${d.multiCurrency ? 'Денежные итоги разделены по валютам сделок.' : 'Допущение: портал ведёт сделки в одной валюте — итоги в ₽.'}</div>`;
       } catch (err) {
         renderError('Не удалось загрузить данные: ' + err.message);
         root.innerHTML = '<div class="empty"><b>Ошибка загрузки</b>Проверьте доступ к API и попробуйте ещё раз.</div>';

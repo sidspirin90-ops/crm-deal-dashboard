@@ -17,6 +17,8 @@
 
 Правка в этой версии (v5): гейт `/api/*` переведён с `X-Vibe-Authorization` на **`X-Vibe-User-Id`** (проверка наличия заголовка `x-vibe-user-id`, иначе `401`) — см. замечание про опознанность посетителя. Апстрим-вызовы `/v1/*` идут с `X-Api-Key` (лицо — владелец ключа).
 
+Правка v6: **разделение денежных итогов по валютам**. Агрегат не поддерживает `groupBy: currencyId` (`400`), поэтому: `loadCurrencies()` (`POST /v1/currencies/search`) → один `POST /v1/deals/aggregate` (`filter.currencyId`, `groupBy: stageId`) на каждую валюту → `stages[].amounts` и `summary.perCurrency` в `/api/data`; фронт (`fmtMoney`, `renderKpis`, `renderFunnel`) рисует суммы по валютам отдельно, при одной валюте вид прежний. `search` по-прежнему только для 10 последних сделок.
+
 ## Что изменено ранее и учтено
 
 - v2: KPI + агрегаты + лимит 10 + защита `/api/*`.

@@ -104,13 +104,33 @@ function dateRange(from, to) {
   return { from: gte.slice(0, 10), to: lte.slice(0, 10), filter: { $gte: gte, $lte: lte } };
 }
 
-async function loadStageAggregation(createdAt) {
+// Валюты портала — чтобы денежные итоги никогда не смешивались.
+// Агрегат не умеет группировать по currencyId (400), зато принимает его в filter,
+// поэтому гоняем один агрегат на каждую валюту.
+async function loadCurrencies() {
+  const { data } = await vibeCall('/v1/currencies/search', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ filter: {}, limit: 50 }),
+  });
+  const rows = Array.isArray(data) ? data : [];
+  const ids = [];
+  for (const r of rows) {
+    const id = String((r && (r.id || r.currencyId || r.code)) || '').trim();
+    if (id && !ids.includes(id)) ids.push(id);
+  }
+  return ids.slice(0, 12);
+}
+
+async function loadStageAggregation(createdAt, currencyId) {
+  const filter = Object.assign({ categoryId: MAIN_CATEGORY_ID }, { createdAt });
+  if (currencyId) filter.currencyId = currencyId;
   const { data } = await vibeCall('/v1/deals/aggregate', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify({
       aggregate: [{ field: 'amount', function: 'sum' }],
-      filter: Object.assign({ categoryId: MAIN_CATEGORY_ID }, { createdAt }),
+      filter,
       groupBy: 'stageId',
     }),
   });
@@ -132,49 +152,75 @@ async function loadRecent(createdAt) {
 }
 
 async function buildDashboard(from, to) {
-  const [stages, funnel, recent] = await Promise.all([
-    loadStages(),
-    loadStageAggregation(dateRange(from, to).filter),
-    loadRecent(dateRange(from, to).filter),
+  const stages = await loadStages();
+  const range = dateRange(from, to);
+  const currencies = await loadCurrencies();
+  const curList = currencies.length ? currencies : ['RUB'];
+
+  const [perCur, recent] = await Promise.all([
+    Promise.all(curList.map(async (cur) => ({
+      cur,
+      funnel: await loadStageAggregation(range.filter, cur),
+    }))),
+    loadRecent(range.filter),
   ]);
 
-  const byStage = new Map((funnel.groups || []).map((g) => [g.stageId, g]));
   // Выигранными считаем только стадии с семантикой S (успех).
   const wonStage = (stages.find((s) => s.stageSemanticId === 'S') || {}).stageId || 'WON';
 
+  // Строки воронки: количество суммарно, деньги — отдельно по каждой валюте.
   const stageRows = stages.map((st) => {
-    const g = byStage.get(st.stageId);
-    const count = g ? g.count : 0;
-    const amount = g && g.aggregates && g.aggregates.amount ? g.aggregates.amount.sum || 0 : 0;
-    return Object.assign({}, st, { count, amount });
+    let count = 0;
+    const amounts = {};
+    for (const { cur, funnel } of perCur) {
+      const g = (funnel.groups || []).find((x) => x.stageId === st.stageId);
+      const c = g ? (g.count || 0) : 0;
+      const a = g && g.aggregates && g.aggregates.amount ? (g.aggregates.amount.sum || 0) : 0;
+      count += c;
+      amounts[cur] = a;
+    }
+    return Object.assign({}, st, { count, amounts });
   });
 
-  const wonRow = byStage.get(wonStage);
-  const wonCount = wonRow ? wonRow.count : 0;
-  const wonSum = wonRow && wonRow.aggregates && wonRow.aggregates.amount
-    ? wonRow.aggregates.amount.sum || 0 : 0;
-
-  let openSum = 0, openCount = 0;
+  const perCurrency = {};
+  for (const cur of curList) {
+    perCurrency[cur] = { symbol: currencySymbol(cur), openSum: 0, wonSum: 0, avgCheck: 0 };
+  }
+  let openCount = 0, wonCount = 0;
   for (const row of stageRows) {
     const closed = row.stageSemanticId === 'S' || row.stageSemanticId === 'F';
-    if (!closed) { openSum += row.amount; openCount += row.count; }
+    if (closed) continue;
+    openCount += row.count;
+    for (const cur of curList) {
+      perCurrency[cur].openSum += (row.amounts[cur] || 0);
+    }
   }
+  for (const { cur, funnel } of perCur) {
+    const g = (funnel.groups || []).find((x) => x.stageId === wonStage);
+    const c = g ? (g.count || 0) : 0;
+    const a = g && g.aggregates && g.aggregates.amount ? (g.aggregates.amount.sum || 0) : 0;
+    perCurrency[cur].wonSum = a;
+    perCurrency[cur].avgCheck = c ? a / c : 0;
+  }
+  wonCount = perCur.reduce((acc, { funnel }) => {
+    const g = (funnel.groups || []).find((x) => x.stageId === wonStage);
+    return acc + (g ? (g.count || 0) : 0);
+  }, 0);
 
   const totalCount = stageRows.reduce((a, r) => a + r.count, 0);
   const conversion = totalCount ? (wonCount / totalCount) * 100 : 0;
-  const avgCheck = wonCount ? wonSum / wonCount : 0;
 
   return {
     period: { from, to },
+    multiCurrency: curList.length > 1,
+    currencies: curList.map((c) => ({ id: c, symbol: currencySymbol(c) })),
     stages: stageRows,
     summary: {
       totalCount,
       openCount,
-      openSum,
       wonCount,
-      wonSum,
-      avgCheck,
       conversion,
+      perCurrency,
     },
     recent: recent.map((d) => ({
       id: d.id,
