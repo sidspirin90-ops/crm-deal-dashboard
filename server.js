@@ -31,7 +31,9 @@ function friendlyError(status, fallback) {
   switch (status) {
     case 401: return 'Неверный или отсутствующий ключ доступа (401). Проверьте X-Vibe-Authorization и срок действия ключа.';
     case 403: return 'Доступ запрещён (403). Ключу не хватает скоупов для этого запроса.';
+    case 422: return 'Агрегация отклонена порталом (422): слишком дорогой запрос. Сузьте период или обратитесь к администратору портала.';
     case 502: return 'Шлюз или API временно недоступен (502). Попробуйте повторить позже.';
+    case 504: return 'Превышен лимит ожидания ответа Vibe API. Повторите запрос позже.';
     default: return fallback || null;
   }
 }
@@ -50,12 +52,27 @@ function currencySymbol(id) {
 let stageCache = null;
 let stageCacheTs = 0;
 
-async function vibeCall(routePath, init = {}) {
+async function vibeCall(routePath, init = {}, timeoutMs = 25000) {
   const headers = Object.assign({ 'X-Api-Key': API_KEY }, init.headers || {});
   let attempts = 0;
   for (;;) {
     attempts++;
-    const res = await fetch(VIBE_BASE + routePath, Object.assign({}, init, { headers }));
+    const ctrl = new AbortController();
+    const timer = setTimeout(() => ctrl.abort(), timeoutMs);
+    let res;
+    try {
+      res = await fetch(VIBE_BASE + routePath, Object.assign({}, init, { headers, signal: ctrl.signal }));
+    } catch (e) {
+      clearTimeout(timer);
+      if (e && e.name === 'AbortError') {
+        const err = new Error(`Vibe API timeout (${Math.round(timeoutMs / 1000)}s): ${routePath}. Повторите позже.`);
+        err.status = 504;
+        err.body = null;
+        throw err;
+      }
+      throw e;
+    }
+    clearTimeout(timer);
     const body = await res.json().catch(() => null);
 
     if (res.status === 429 && attempts < 5) {
@@ -107,7 +124,12 @@ function dateRange(from, to) {
 // Валюты портала — чтобы денежные итоги никогда не смешивались.
 // Агрегат не умеет группировать по currencyId (400), зато принимает его в filter,
 // поэтому гоняем один агрегат на каждую валюту.
+// Кэш валют портала на 30 минут — справочник почти не меняется.
+let curCache = null;
+let curCacheTs = 0;
+
 async function loadCurrencies() {
+  if (curCache && Date.now() - curCacheTs < 30 * 60 * 1000) return curCache;
   const { data } = await vibeCall('/v1/currencies/search', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
@@ -119,7 +141,9 @@ async function loadCurrencies() {
     const id = String((r && (r.id || r.currencyId || r.code)) || '').trim();
     if (id && !ids.includes(id)) ids.push(id);
   }
-  return ids.slice(0, 12);
+  curCache = ids.slice(0, 12);
+  curCacheTs = Date.now();
+  return curCache;
 }
 
 async function loadStageAggregation(createdAt, currencyId) {
@@ -152,18 +176,20 @@ async function loadRecent(createdAt) {
 }
 
 async function buildDashboard(from, to) {
-  const stages = await loadStages();
   const range = dateRange(from, to);
-  const currencies = await loadCurrencies();
-  const curList = currencies.length ? currencies : ['RUB'];
-
-  const [perCur, recent] = await Promise.all([
-    Promise.all(curList.map(async (cur) => ({
-      cur,
-      funnel: await loadStageAggregation(range.filter, cur),
-    }))),
+  const [stages, currencies, recent] = await Promise.all([
+    loadStages(),
+    loadCurrencies(),
     loadRecent(range.filter),
   ]);
+  const curList = currencies.length ? currencies : ['RUB'];
+
+  // Агрегаты — СТРОГО последовательно. Параллельный залп агрегатов упирается
+  // в лимит стоимости портала (422 AGGREGATION_LIMIT_EXCEEDED).
+  const perCur = [];
+  for (const cur of curList) {
+    perCur.push({ cur, funnel: await loadStageAggregation(range.filter, cur) });
+  }
 
   // Выигранными считаем только стадии с семантикой S (успех).
   const wonStage = (stages.find((s) => s.stageSemanticId === 'S') || {}).stageId || 'WON';
