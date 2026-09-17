@@ -259,6 +259,7 @@ async function buildDashboard(from, to, onlyCurrency) {
       title: d.title || `Сделка #${d.id}`,
       amount: d.amount || 0,
       currency: currencySymbol(d.currencyId),
+      currencyId: d.currencyId || null,
       stageId: d.stageId,
       stageName: (stages.find((s) => s.stageId === d.stageId) || {}).name || d.stageId,
       stageColor: (stages.find((s) => s.stageId === d.stageId) || {}).color || null,

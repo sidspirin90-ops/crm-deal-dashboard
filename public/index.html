@@ -315,6 +315,7 @@
             <div class="deal-id">#${d.id}</div>
           </td>
           <td class="muted" style="white-space:nowrap"><b>${fmt(d.amount)}</b> ${d.currency}</td>
+          <td class="muted" style="white-space:nowrap">${escapeHtml(d.currencyId || '—')}</td>
           <td><span class="stage-tag" style="background:${stageColor(d.stageColor)}">${escapeHtml(d.stageName)}</span></td>
           <td class="muted">${d.responsibleId ? 'Ответственный #' + d.responsibleId : '—'}</td>
           <td class="muted" style="white-space:nowrap">${humanDate(d.createdAt)}</td>
@@ -323,7 +324,7 @@
         <div class="card">
           <div class="head"><h2>Последние сделки</h2><div class="note">${recent.length} из 10 последних · по дате создания</div></div>
           <table>
-            <thead><tr><th>Сделка</th><th>Сумма</th><th>Стадия</th><th>Ответственный</th><th>Создана</th></tr></thead>
+            <thead><tr><th>Сделка</th><th>Сумма</th><th>Валюта</th><th>Стадия</th><th>Ответственный</th><th>Создана</th></tr></thead>
             <tbody>${rows}</tbody>
           </table>
         </div>`;
@@ -369,11 +370,16 @@
           ? ` за период ${d.period.from}`
           : ` за период ${d.period.from} — ${d.period.to}`;
 
+        const symMap = {};
+        (d.currencies || []).forEach((c) => { symMap[c.id] = c.symbol || ''; });
+        const curSym = d.currency ? (symMap[d.currency] || '') : '';
+        const curTag = d.currency ? ' · валюта: ' + d.currency + (curSym ? ' ' + curSym : '') : '';
+
         root.innerHTML =
           renderKpis(d.summary) +
           renderFunnel(d.stages, d.summary) +
           renderRecent(d.recent) +
-          `<div class="footer">Показаны сделки основной воронки (категория 0)${rangeLabel}${d.currency ? ' · валюта: ' + d.currency : ''}. ${d.multiCurrency ? 'Денежные итоги разделены по валютам сделок.' : 'Допущение: портал ведёт сделки в одной валюте — итоги в ₽.'}</div>`;
+          `<div class="footer">Показаны сделки основной воронки (категория 0)${rangeLabel}${curTag}. ${d.multiCurrency ? 'Денежные итоги разделены по валютам сделок.' : 'Допущение: портал ведёт сделки в одной валюте — итоги в ' + (curSym || '₽') + '.'}</div>`;
       } catch (err) {
         renderError('Не удалось загрузить данные: ' + err.message);
         root.innerHTML = '<div class="empty"><b>Ошибка загрузки</b>Проверьте доступ к API и попробуйте ещё раз.</div>';
