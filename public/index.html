@@ -1,0 +1,337 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <link rel="icon" href="/_gw/icon">
+  <title>Аналитика сделок CRM</title>
+  <style>
+    :root {
+      --bg: #f3f5f8;
+      --card: #ffffff;
+      --line: #e4e8ee;
+      --text: #1c2b3a;
+      --muted: #6b7b8c;
+      --primary: #2fc6f6;
+      --primary-2: #1c9de0;
+      --blue: #2e74b5;
+      --green: #25a25a;
+      --amber: #eaa300;
+      --red: #e5524b;
+      --shadow: 0 1px 3px rgba(16, 30, 46, .08);
+      --radius: 12px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: "Segoe UI", Roboto, -apple-system, system-ui, Arial, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      -webkit-font-smoothing: antialiased;
+    }
+    header {
+      position: sticky; top: 0; z-index: 10;
+      background: linear-gradient(100deg, #12324a, #1d5c86);
+      color: #fff; padding: 16px 20px;
+      display: flex; flex-wrap: wrap; align-items: center; gap: 14px;
+      box-shadow: 0 1px 6px rgba(0,0,0,.18);
+    }
+    header .brand { display: flex; align-items: center; gap: 12px; }
+    header .logo {
+      width: 40px; height: 40px; border-radius: 10px; flex: 0 0 auto;
+      background: #fff; display: flex; align-items: center; justify-content: center;
+      font-size: 20px;
+    }
+    header h1 { margin: 0; font-size: 17px; font-weight: 600; line-height: 1.2; }
+    header p { margin: 2px 0 0; font-size: 12px; opacity: .85; }
+    .controls { margin-left: auto; display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .presets { display: flex; gap: 6px; }
+    .pill, .date-field, .btn {
+      border: 1px solid rgba(255,255,255,.35); background: rgba(255,255,255,.10);
+      color: #fff; font: inherit; font-size: 12.5px; cursor: pointer;
+      padding: 7px 12px; border-radius: 20px; transition: background .15s, border-color .15s;
+    }
+    .dates { display: flex; align-items: center; gap: 6px; }
+    .date-field { color-scheme: dark; }
+    .pill.active { background: #fff; color: var(--blue); border-color: #fff; font-weight: 600; }
+    .pill:hover { background: rgba(255,255,255,.22); }
+    .btn { background: #fff; color: var(--blue); border-color: #fff; font-weight: 600; }
+    .btn:hover { background: #e8f3fb; }
+    main { max-width: 1180px; margin: 0 auto; padding: 22px 16px 60px; }
+    .kpis { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 14px; margin-bottom: 22px; }
+    .kpi {
+      background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+      padding: 16px 18px; box-shadow: var(--shadow); position: relative; overflow: hidden;
+    }
+    .kpi::before { content: ""; position: absolute; left: 0; top: 0; bottom: 0; width: 4px; }
+    .kpi.b-open::before { background: var(--primary-2); }
+    .kpi.b-won::before { background: var(--green); }
+    .kpi.b-check::before { background: var(--amber); }
+    .kpi.b-conv::before { background: var(--blue); }
+    .kpi .label { font-size: 12px; color: var(--muted); }
+    .kpi .value { font-size: 24px; font-weight: 700; margin-top: 6px; letter-spacing: -.3px; }
+    .kpi .sub { font-size: 12px; color: var(--muted); margin-top: 4px; }
+    .card {
+      background: var(--card); border: 1px solid var(--line); border-radius: var(--radius);
+      box-shadow: var(--shadow); margin-bottom: 22px;
+    }
+    .card .head { padding: 14px 18px; border-bottom: 1px solid var(--line); }
+    .card .head h2 { margin: 0; font-size: 15px; font-weight: 600; }
+    .card .head .note { font-size: 12px; color: var(--muted); margin-top: 3px; }
+    .funnel { padding: 8px 18px 18px; }
+    .row { display: flex; align-items: center; gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--line); }
+    .row:last-child { border-bottom: none; }
+    .dot { width: 12px; height: 12px; border-radius: 4px; flex: 0 0 auto; }
+    .row .name { flex: 0 0 180px; font-size: 13.5px; font-weight: 500; min-width: 0; }
+    .row .bar-wrap { flex: 1 1 auto; height: 22px; background: #eff2f6; border-radius: 6px; overflow: hidden; }
+    .row .bar { height: 100%; border-radius: 6px; min-width: 2px; transition: width .4s ease; }
+    .row .num { flex: 0 0 auto; min-width: 74px; text-align: right; font-size: 13px; }
+    .row .num b { display: block; font-weight: 700; }
+    .row .num span { font-size: 11.5px; color: var(--muted); }
+    table { width: 100%; border-collapse: collapse; font-size: 13px; }
+    thead th { text-align: left; font-size: 11.5px; text-transform: uppercase; color: var(--muted); padding: 10px 18px; border-bottom: 1px solid var(--line); white-space: nowrap; }
+    tbody td { padding: 11px 18px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+    tbody tr:last-child td { border-bottom: none; }
+    tbody tr:hover { background: #f7fafc; }
+    .deal-title { font-weight: 500; }
+    .deal-id { color: var(--muted); font-size: 11.5px; }
+    .stage-tag {
+      display: inline-block; padding: 3px 10px; border-radius: 20px; font-size: 12px; font-weight: 600;
+      color: #fff; white-space: nowrap;
+    }
+    .muted { color: var(--muted); }
+    .empty { padding: 40px 18px; text-align: center; color: var(--muted); }
+    .empty b { color: var(--text); display: block; margin-bottom: 6px; font-size: 15px; }
+    .footer { color: var(--muted); font-size: 12px; text-align: center; margin-top: 6px; }
+    .error-banner {
+      background: #fdecea; color: #a03a34; border: 1px solid #f3c2bd; border-radius: var(--radius);
+      padding: 12px 16px; font-size: 13px; margin-bottom: 16px;
+    }
+    .loading { text-align: center; color: var(--muted); padding: 40px 0; }
+    @media (max-width: 720px) {
+      .controls { margin-left: 0; width: 100%; }
+      .row .name { flex-basis: 110px; }
+      thead { display: none; }
+      table, tbody, tr { display: block; }
+      tbody tr { padding: 8px 0; border-bottom: 1px solid var(--line); display: grid; grid-template-columns: 1fr auto; gap: 2px 12px; }
+      tbody td { padding: 2px 18px; border: none; display: block; }
+      .kpis { grid-template-columns: 1fr 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="brand">
+      <div class="logo">📊</div>
+      <div>
+        <h1>Аналитика сделок CRM</h1>
+        <p id="portal-line">Воронка продаж · сделки</p>
+      </div>
+    </div>
+    <div class="controls">
+      <div class="presets" id="presets">
+        <button class="pill" data-days="7">7 дн</button>
+        <button class="pill active" data-days="30">30 дн</button>
+        <button class="pill" data-days="90">90 дн</button>
+        <button class="pill" data-days="365">Год</button>
+        <button class="pill" data-days="0">Всё</button>
+      </div>
+      <div class="dates">
+        <input type="date" class="date-field" id="from" aria-label="Дата с">
+        <span>—</span>
+        <input type="date" class="date-field" id="to" aria-label="Дата по">
+      </div>
+      <button class="btn" id="apply">Применить</button>
+    </div>
+  </header>
+
+  <main>
+    <div id="error" class="error-banner" hidden></div>
+    <div id="root">
+      <div class="loading" id="loading">Загружаем данные…</div>
+    </div>
+  </main>
+
+  <script>
+    const $ = (id) => document.getElementById(id);
+    const state = { days: 30, from: '', to: '' };
+
+    function fmt(n) {
+      if (n === null || n === undefined || isNaN(n)) return '0';
+      const abs = Math.abs(n);
+      if (abs >= 1e9) return (n / 1e9).toFixed(2).replace('.', ',') + ' млрд';
+      if (abs >= 1e6) return (n / 1e6).toFixed(2).replace('.', ',') + ' млн';
+      if (abs >= 1e4) return Math.round(n).toLocaleString('ru-RU');
+      return Math.round(n).toLocaleString('ru-RU');
+    }
+
+    function setDefaults() {
+      const today = new Date();
+      const to = today.toISOString().slice(0, 10);
+      const from = new Date(today.getTime() - (state.days - 1) * 86400000).toISOString().slice(0, 10);
+      $('from').value = from;
+      $('to').value = to;
+    }
+
+    document.querySelectorAll('#presets .pill').forEach((btn) => {
+      btn.addEventListener('click', () => {
+        document.querySelectorAll('#presets .pill').forEach((b) => b.classList.remove('active'));
+        btn.classList.add('active');
+        state.days = Number(btn.dataset.days);
+        setDefaults();
+        load();
+      });
+    });
+
+    $('apply').addEventListener('click', () => {
+      state.from = $('from').value;
+      state.to = $('to').value;
+      load();
+    });
+
+    function stageColor(c) {
+      if (!c) return '#9aa7b5';
+      // Битрикс отдаёт цвета в двух форматах — нормализуем.
+      const v = /^#([0-9a-f]{6})$/i.test(c) ? c : (c.match(/[0-9a-fA-F]{6}/) || [''])[0];
+      return v ? '#' + v : '#9aa7b5';
+    }
+
+    function renderError(msg) {
+      const el = $('error');
+      el.textContent = msg;
+      el.hidden = false;
+    }
+
+    function renderKpis(summary) {
+      return `
+        <div class="kpis">
+          <div class="kpi b-open">
+            <div class="label">Открыто сделок · сумма</div>
+            <div class="value">${fmt(summary.openSum)}</div>
+            <div class="sub">${summary.openCount} открытых сделок</div>
+          </div>
+          <div class="kpi b-won">
+            <div class="label">Выиграно за период</div>
+            <div class="value">${summary.wonCount} <span class="muted" style="font-size:14px">сделок</span></div>
+            <div class="sub">на ${fmt(summary.wonSum)}</div>
+          </div>
+          <div class="kpi b-check">
+            <div class="label">Средний чек</div>
+            <div class="value">${fmt(summary.avgCheck)}</div>
+            <div class="sub">по выигранным сделкам</div>
+          </div>
+          <div class="kpi b-conv">
+            <div class="label">Конверсия в успешные</div>
+            <div class="value">${summary.conversion.toFixed(1)}%</div>
+            <div class="sub">из ${summary.totalCount} сделок в воронке</div>
+          </div>
+        </div>`;
+    }
+
+    function maxStageAmount(stages) {
+      return stages.reduce((m, s) => Math.max(m, s.amount || 0), 0) || 1;
+    }
+
+    function renderFunnel(stages) {
+      const maxAmt = maxStageAmount(stages);
+      const rows = stages.map((s) => `
+        <div class="row">
+          <span class="dot" style="background:${stageColor(s.color)}"></span>
+          <span class="name" title="${s.stageId}">${s.name || s.stageId}</span>
+          <div class="bar-wrap" title="${s.count} сделок · ${fmt(s.amount)}">
+            <div class="bar" style="width:${Math.round(((s.amount || 0) / maxAmt) * 100)}%;background:${stageColor(s.color)}"></div>
+          </div>
+          <div class="num"><b>${s.count}</b><span>${fmt(s.amount)}</span></div>
+        </div>`).join('');
+      const empty = stages.length ? `
+        <div class="row"><span class="dot" style="background:#d7dee6;width:16px;height:16px"></span>
+        <span class="name">Нет сделок за период</span></div>` : '';
+      return `
+        <div class="card">
+          <div class="head"><h2>Воронка по стадиям</h2><div class="note">Количество сделок и сумма по каждой стадии</div></div>
+          <div class="funnel">
+            ${stages.length ? rows : '<div class="empty"><b>Данных пока нет</b>В воронке ещё нет сделок. Они появятся здесь, как только будут созданы на портале.</div>'}
+          </div>
+        </div>`;
+    }
+
+    function renderRecent(recent) {
+      if (!recent.length) {
+        return `
+          <div class="card"><div class="head"><h2>Последние сделки</h2></div>
+          <div class="empty"><b>Сделок нет</b>За выбранный период сделки не создавались.</div></div>`;
+      }
+      const rows = recent.map((d) => `
+        <tr>
+          <td>
+            <div class="deal-title">${escapeHtml(d.title)}</div>
+            <div class="deal-id">#${d.id}</div>
+          </td>
+          <td class="muted" style="white-space:nowrap"><b>${fmt(d.amount)}</b> ${d.currency}</td>
+          <td><span class="stage-tag" style="background:${stageColor(d.stageColor)}">${escapeHtml(d.stageName)}</span></td>
+          <td class="muted">${d.responsibleId ? 'Ответственный #' + d.responsibleId : '—'}</td>
+          <td class="muted" style="white-space:nowrap">${humanDate(d.createdAt)}</td>
+        </tr>`).join('');
+      return `
+        <div class="card">
+          <div class="head"><h2>Последние сделки</h2><div class="note">${recent.length} из 10 последних · по дате создания</div></div>
+          <table>
+            <thead><tr><th>Сделка</th><th>Сумма</th><th>Стадия</th><th>Ответственный</th><th>Создана</th></tr></thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>`;
+    }
+
+    function escapeHtml(s) {
+      return String(s == null ? '' : s).replace(/[&<>"']/g, (c) => ({
+        '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
+      }[c]));
+    }
+    function humanDate(iso) {
+      if (!iso) return '—';
+      const d = new Date(iso);
+      if (isNaN(d)) return '—';
+      return d.toLocaleDateString('ru-RU');
+    }
+
+    async function load() {
+      $('error').hidden = true;
+      const root = $('root');
+      root.innerHTML = '<div class="loading">Загружаем данные…</div>';
+
+      const from = $('from').value || state.from || '';
+      const to = $('to').value || state.to || '';
+      const qs = new URLSearchParams();
+      if (from) qs.set('from', from);
+      if (to) qs.set('to', to);
+
+      try {
+        const metaRes = await fetch('/api/meta');
+        const meta = await metaRes.json();
+        if (meta && meta.portal) $('portal-line').textContent = 'Воронка продаж · ' + meta.portal;
+
+        const res = await fetch('/api/data?' + qs.toString());
+        const json = await res.json();
+        if (!json.success) throw new Error((json.error && json.error.message) || 'Ошибка сервера');
+
+        const d = json.data;
+        const rangeLabel = d.period.from === d.period.to
+          ? ` за период ${d.period.from}`
+          : ` за период ${d.period.from} — ${d.period.to}`;
+
+        root.innerHTML =
+          renderKpis(d.summary) +
+          renderFunnel(d.stages) +
+          renderRecent(d.recent) +
+          `<div class="footer">Показаны сделки основной воронки (категория 0)${rangeLabel}. Допущение: портал ведёт сделки в одной валюте — итоги в ₽.</div>`;
+      } catch (err) {
+        renderError('Не удалось загрузить данные: ' + err.message);
+        root.innerHTML = '<div class="empty"><b>Ошибка загрузки</b>Проверьте доступ к API и попробуйте ещё раз.</div>';
+      }
+    }
+
+    setDefaults();
+    load();
+  </script>
+</body>
+</html>

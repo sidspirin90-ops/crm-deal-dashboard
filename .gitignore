@@ -1,0 +1,13 @@
+# deps
+node_modules/
+
+# opencode workspace
+.opencode/
+
+# generated archives (обычно заливаются отдельным артефактом)
+*.zip
+*.tar.gz
+
+# os
+.DS_Store
+Thumbs.db
