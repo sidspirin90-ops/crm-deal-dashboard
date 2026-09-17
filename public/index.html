@@ -141,6 +141,9 @@
         <span>—</span>
         <input type="date" class="date-field" id="to" aria-label="Дата по">
       </div>
+      <select class="date-field" id="currency" aria-label="Валюта">
+        <option value="">Все валюты</option>
+      </select>
       <button class="btn" id="apply">Применить</button>
     </div>
   </header>
@@ -154,7 +157,16 @@
 
   <script>
     const $ = (id) => document.getElementById(id);
-    const state = { days: 30, from: '', to: '' };
+    const state = { days: 30, from: '', to: '', currency: '' };
+
+    function fillCurrencySelect(list) {
+      const sel = $('currency');
+      const cur = state.currency || '';
+      sel.innerHTML = '<option value="">Все валюты</option>' + (list || []).map((c) =>
+        `<option value="${escapeHtml(c.id)}">${escapeHtml(c.id)}${c.symbol ? ' ' + escapeHtml(c.symbol) : ''}</option>`
+      ).join('');
+      sel.value = cur;
+    }
 
     function fmt(n) {
       if (n === null || n === undefined || isNaN(n)) return '0';
@@ -186,6 +198,12 @@
     $('apply').addEventListener('click', () => {
       state.from = $('from').value;
       state.to = $('to').value;
+      state.currency = $('currency').value;
+      load();
+    });
+
+    $('currency').addEventListener('change', () => {
+      state.currency = $('currency').value;
       load();
     });
 
@@ -329,11 +347,13 @@
       const qs = new URLSearchParams();
       if (from) qs.set('from', from);
       if (to) qs.set('to', to);
+      if (state.currency) qs.set('currency', state.currency);
 
       try {
         const metaRes = await fetch('/api/meta');
         const meta = await metaRes.json();
         if (meta && meta.portal) $('portal-line').textContent = 'Воронка продаж · ' + meta.portal;
+        if (meta && meta.currencies) fillCurrencySelect(meta.currencies);
 
         const res = await fetch('/api/data?' + qs.toString());
         const json = await res.json();
@@ -348,7 +368,7 @@
           renderKpis(d.summary) +
           renderFunnel(d.stages, d.summary) +
           renderRecent(d.recent) +
-          `<div class="footer">Показаны сделки основной воронки (категория 0)${rangeLabel}. ${d.multiCurrency ? 'Денежные итоги разделены по валютам сделок.' : 'Допущение: портал ведёт сделки в одной валюте — итоги в ₽.'}</div>`;
+          `<div class="footer">Показаны сделки основной воронки (категория 0)${rangeLabel}${d.currency ? ' · валюта: ' + d.currency : ''}. ${d.multiCurrency ? 'Денежные итоги разделены по валютам сделок.' : 'Допущение: портал ведёт сделки в одной валюте — итоги в ₽.'}</div>`;
       } catch (err) {
         renderError('Не удалось загрузить данные: ' + err.message);
         root.innerHTML = '<div class="empty"><b>Ошибка загрузки</b>Проверьте доступ к API и попробуйте ещё раз.</div>';

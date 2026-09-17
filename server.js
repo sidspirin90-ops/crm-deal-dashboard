@@ -175,14 +175,16 @@ async function loadRecent(createdAt) {
   return Array.isArray(data) ? data : [];
 }
 
-async function buildDashboard(from, to) {
+async function buildDashboard(from, to, onlyCurrency) {
   const range = dateRange(from, to);
   const [stages, currencies, recent] = await Promise.all([
     loadStages(),
     loadCurrencies(),
     loadRecent(range.filter),
   ]);
-  const curList = currencies.length ? currencies : ['RUB'];
+  let curList = currencies.length ? currencies : ['RUB'];
+  // Фильтр по валюте из панели: считаем только выбранную валюту.
+  if (onlyCurrency && curList.includes(onlyCurrency)) curList = [onlyCurrency];
 
   // Агрегаты — СТРОГО последовательно. Параллельный залп агрегатов упирается
   // в лимит стоимости портала (422 AGGREGATION_LIMIT_EXCEEDED).
@@ -238,6 +240,7 @@ async function buildDashboard(from, to) {
 
   return {
     period: { from, to },
+    currency: curList.length === 1 ? curList[0] : null,
     multiCurrency: curList.length > 1,
     currencies: curList.map((c) => ({ id: c, symbol: currencySymbol(c) })),
     stages: stageRows,
@@ -329,11 +332,12 @@ const server = http.createServer(async (req, res) => {
     }
 
     if (pathname === '/api/meta') {
-      const stages = await loadStages();
+      const [stages, currencies] = await Promise.all([loadStages(), loadCurrencies()]);
       return sendJson(res, 200, {
         success: true,
         portal: (process.env.PORTAL_NAME || '').trim() || null,
         stages,
+        currencies: currencies.map((c) => ({ id: c, symbol: currencySymbol(c) })),
         mainCategoryId: MAIN_CATEGORY_ID,
       });
     }
@@ -341,8 +345,9 @@ const server = http.createServer(async (req, res) => {
     if (pathname === '/api/data') {
       const from = url.searchParams.get('from') || '';
       const to = url.searchParams.get('to') || '';
+      const currency = (url.searchParams.get('currency') || '').trim();
       const range = dateRange(from, to);
-      const data = await buildDashboard(range.from, range.to);
+      const data = await buildDashboard(range.from, range.to, currency);
       return sendJson(res, 200, { success: true, data });
     }
 
