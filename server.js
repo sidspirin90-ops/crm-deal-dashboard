@@ -136,12 +136,14 @@ async function loadCurrencies() {
     body: JSON.stringify({ filter: {}, limit: 50 }),
   });
   const rows = Array.isArray(data) ? data : [];
-  const ids = [];
+  const out = [];
   for (const r of rows) {
     const id = String((r && (r.id || r.currencyId || r.code)) || '').trim();
-    if (id && !ids.includes(id)) ids.push(id);
+    if (!id || out.some((x) => x.id === id)) continue;
+    out.push({ id, base: r.base === true || r.base === 'Y' || r.base === '1' });
+    if (out.length >= 12) break;
   }
-  curCache = ids.slice(0, 12);
+  curCache = out;
   curCacheTs = Date.now();
   return curCache;
 }
@@ -182,7 +184,8 @@ async function buildDashboard(from, to, onlyCurrency) {
     loadCurrencies(),
     loadRecent(range.filter),
   ]);
-  let curList = currencies.length ? currencies : ['RUB'];
+  let curList = currencies.map((c) => c.id);
+  if (!curList.length) curList = ['RUB'];
   // Фильтр по валюте из панели: считаем только выбранную валюту.
   if (onlyCurrency && curList.includes(onlyCurrency)) curList = [onlyCurrency];
 
@@ -337,7 +340,7 @@ const server = http.createServer(async (req, res) => {
         success: true,
         portal: (process.env.PORTAL_NAME || '').trim() || null,
         stages,
-        currencies: currencies.map((c) => ({ id: c, symbol: currencySymbol(c) })),
+        currencies: currencies.map((c) => ({ id: c.id, symbol: currencySymbol(c.id), base: !!c.base })),
         mainCategoryId: MAIN_CATEGORY_ID,
       });
     }

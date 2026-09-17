@@ -161,11 +161,15 @@
 
     function fillCurrencySelect(list) {
       const sel = $('currency');
-      const cur = state.currency || '';
-      sel.innerHTML = '<option value="">Все валюты</option>' + (list || []).map((c) =>
+      const items = list || [];
+      if (!state.currency) {
+        const base = items.find((c) => c.base) || items[0];
+        if (base) state.currency = base.id;
+      }
+      sel.innerHTML = items.map((c) =>
         `<option value="${escapeHtml(c.id)}">${escapeHtml(c.id)}${c.symbol ? ' ' + escapeHtml(c.symbol) : ''}</option>`
       ).join('');
-      sel.value = cur;
+      if (state.currency) sel.value = state.currency;
     }
 
     function fmt(n) {
@@ -344,16 +348,17 @@
 
       const from = $('from').value || state.from || '';
       const to = $('to').value || state.to || '';
-      const qs = new URLSearchParams();
-      if (from) qs.set('from', from);
-      if (to) qs.set('to', to);
-      if (state.currency) qs.set('currency', state.currency);
 
       try {
         const metaRes = await fetch('/api/meta');
         const meta = await metaRes.json();
         if (meta && meta.portal) $('portal-line').textContent = 'Воронка продаж · ' + meta.portal;
         if (meta && meta.currencies) fillCurrencySelect(meta.currencies);
+
+        const qs = new URLSearchParams();
+        if (from) qs.set('from', from);
+        if (to) qs.set('to', to);
+        if (state.currency) qs.set('currency', state.currency);
 
         const res = await fetch('/api/data?' + qs.toString());
         const json = await res.json();
